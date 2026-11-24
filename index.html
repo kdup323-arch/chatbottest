@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>챗봇 체험장</title>
+<meta name="description" content="우리 회사 챗봇을 여러 종류의 홈페이지에 붙여 보고 손님처럼 물어볼 수 있어요.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{--ink:#15202B;--sub:#5B6770;--line:#DCE1E5;--bg:#F3F5F7;--card:#fff;--act:#1F4FD8;--ok:#1B8556;--warn:#B4541A}
+  @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--ink:#E8ECEF;--sub:#9AA6AF;--line:#2C353D;--bg:#12171C;--card:#1A2128;--act:#7C9BFF;--ok:#4CC38A;--warn:#F0A060}}
+  :root[data-theme="dark"]{--ink:#E8ECEF;--sub:#9AA6AF;--line:#2C353D;--bg:#12171C;--card:#1A2128;--act:#7C9BFF;--ok:#4CC38A;--warn:#F0A060}
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:var(--bg);color:var(--ink);font-family:"Noto Sans KR",system-ui,sans-serif;display:flex;flex-direction:column;word-break:keep-all;overflow-wrap:break-word}
+  header{background:var(--card);border-bottom:1px solid var(--line);padding:12px 20px 0}
+  .top{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .top h1{font-size:18px;font-weight:800;margin:0;letter-spacing:-.01em}
+  .top p{margin:0;color:var(--sub);font-size:14px}
+  .attach{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0}
+  .attach label{font-size:14px;font-weight:700;white-space:nowrap}
+  .attach input{flex:1 1 260px;min-width:0;padding:9px 12px;border:1px solid var(--line);border-radius:9px;font:inherit;font-size:14px;background:var(--bg);color:var(--ink)}
+  .attach input:focus{outline:2px solid var(--act);outline-offset:1px;border-color:transparent}
+  button{font:inherit;font-size:14px;cursor:pointer;border-radius:9px;padding:9px 14px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-weight:600}
+  button.go{background:var(--act);border-color:var(--act);color:#fff}
+  button:focus-visible{outline:2px solid var(--act);outline-offset:2px}
+  .msg{font-size:13.5px;color:var(--sub);flex-basis:100%;min-height:1.2em;margin:0}
+  .msg.ok{color:var(--ok)}.msg.bad{color:var(--warn)}
+  nav{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;margin:0 -20px;padding:0 20px}
+  nav::-webkit-scrollbar{display:none}
+  nav button{border:0;border-bottom:3px solid transparent;border-radius:0;background:none;padding:10px 12px 9px;color:var(--sub);white-space:nowrap;font-weight:600;display:flex;align-items:center;gap:6px}
+  nav button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--act)}
+  nav button i{width:7px;height:7px;border-radius:50%;background:var(--ok);display:none}
+  nav button.has i{display:inline-block}
+  main{flex:1;position:relative;min-height:0}
+  iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:#fff}
+  iframe[hidden]{display:none}
+  @media (max-width:600px){header{padding:10px 16px 0}nav{margin:0 -16px;padding:0 16px}.top p{display:none}}
+</style>
+</head>
+<body>
+<header>
+  <div class="top">
+    <h1>챗봇 체험장</h1>
+    <p>탭마다 다른 홈페이지예요. 탭마다 다른 챗봇을 붙여서 손님처럼 물어볼 수 있어요.</p>
+  </div>
+  <form class="attach" id="attach" autocomplete="off">
+    <label for="tid" id="tidLabel">이 탭에 붙일 챗봇</label>
+    <input id="tid" placeholder="회사 아이디나 붙이는 코드">
+    <button type="submit" class="go">붙이기</button>
+    <button type="button" id="demo">예시 챗봇</button>
+    <button type="button" id="detach" hidden>떼기</button>
+    <p class="msg" id="msg" role="status"></p>
+  </form>
+  <nav role="tablist" aria-label="예시 홈페이지" id="tabs"></nav>
+</header>
+<main id="stage"></main>
+
+<script>
+/* 탭 하나 = 예시 홈페이지 하나(pages/*.html)를 담은 iframe 하나. 챗봇은 그 안에만 붙어서 탭끼리 섞이지 않는다.
+   탭마다 붙인 챗봇은 이 브라우저에만 기억한다(서버에는 아무것도 저장하지 않음). */
+var SERVER = "https://inquiry-desk-production-aaa6e4ea.up.railway.app";
+var TABS = [
+  { id: "maker", name: "부품 제조사" },
+  { id: "shop", name: "온라인 쇼핑몰" },
+  { id: "clinic", name: "동네 의원" },
+  { id: "academy", name: "학원" },
+  { id: "cafe", name: "카페·식당" },
+  { id: "realty", name: "부동산" },
+  { id: "stay", name: "펜션·숙소" },
+  { id: "blank", name: "빈 페이지" }
+];
+var saved = {};
+try { saved = JSON.parse(localStorage.getItem("pg:tabs") || "{}") || {}; } catch (e) {}
+function keep() { try { localStorage.setItem("pg:tabs", JSON.stringify(saved)); } catch (e) {} }
+
+var tabsEl = document.getElementById("tabs"), stage = document.getElementById("stage"),
+    input = document.getElementById("tid"), msg = document.getElementById("msg"), detachBtn = document.getElementById("detach"),
+    frames = {}, cur = "";
+
+TABS.forEach(function (t) {
+  var b = document.createElement("button");
+  b.type = "button"; b.setAttribute("role", "tab"); b.id = "tab-" + t.id; b.dataset.tab = t.id;
+  b.innerHTML = "<i aria-hidden=\"true\"></i>" + t.name;
+  b.onclick = function () { show(t.id); };
+  tabsEl.appendChild(b);
+});
+
+function src(id) {
+  var s = saved[id], q = s ? "?t=" + encodeURIComponent(s.tid) + (s.server !== SERVER ? "&s=" + encodeURIComponent(s.server) : "") : "";
+  return "pages/" + id + ".html" + q;
+}
+function load(id) {
+  var f = frames[id];
+  if (!f) { f = frames[id] = document.createElement("iframe"); f.title = TABS.filter(function (t) { return t.id === id; })[0].name + " 예시 홈페이지"; stage.appendChild(f); }
+  f.src = src(id);
+}
+function paint() {
+  TABS.forEach(function (t) {
+    var b = document.getElementById("tab-" + t.id);
+    b.setAttribute("aria-selected", t.id === cur); b.tabIndex = t.id === cur ? 0 : -1;
+    b.classList.toggle("has", !!saved[t.id]);
+    b.title = saved[t.id] ? (saved[t.id].name || saved[t.id].tid) + " 챗봇이 붙어 있어요" : "";
+  });
+  var s = saved[cur], name = TABS.filter(function (t) { return t.id === cur; })[0].name;
+  document.getElementById("tidLabel").textContent = "'" + name + "' 탭에 붙일 챗봇";
+  input.value = s ? s.tid : "";
+  detachBtn.hidden = !s;
+  msg.className = "msg" + (s ? " ok" : "");
+  msg.textContent = s ? (s.name || s.tid) + " 챗봇이 붙어 있어요. 오른쪽 아래 버튼을 눌러 물어보세요." : "";
+}
+function show(id) {
+  cur = id;
+  if (!frames[id]) load(id);
+  Object.keys(frames).forEach(function (k) { frames[k].hidden = k !== id; });
+  history.replaceState(null, "", "#" + id);
+  paint();
+}
+
+/* 넣은 글에서 회사 아이디와 서버 주소를 꺼낸다: 아이디만, 붙이는 코드 전체, 설정 화면 주소(?t=) 모두 받는다 */
+function parse(v) {
+  v = v.trim(); if (!v) return null;
+  var m = /data-tenant\s*=\s*["']([^"']+)["']/.exec(v), sm = /src\s*=\s*["'](https?:\/\/[^"'\/]+)[^"']*widget\.js/.exec(v);
+  if (m) return { tid: m[1], server: sm ? sm[1] : SERVER };
+  try { var u = new URL(v); var t = u.searchParams.get("t"); if (t) return { tid: t, server: u.origin }; } catch (e) {}
+  if (/[<>"'\s\/?#]/.test(v)) return null;
+  return { tid: v, server: SERVER };
+}
+function attach(p) {
+  msg.className = "msg"; msg.textContent = "챗봇을 찾는 중이에요…";
+  fetch(p.server + "/api/t/" + encodeURIComponent(p.tid) + "/public").then(function (r) {
+    if (r.status === 404) throw "none";
+    if (!r.ok) throw "err";
+    return r.json();
+  }).then(function (c) {
+    saved[cur] = { tid: p.tid, server: p.server, name: (c && c.name) || "" }; keep(); load(cur); paint();
+  }).catch(function (e) {
+    msg.className = "msg bad";
+    msg.textContent = e === "none" ? "그런 회사 아이디가 없어요. 관리 화면 7단계의 붙이는 코드를 그대로 넣어 주세요." : "지금은 챗봇 서버에 닿지 않아요. 잠시 뒤 다시 눌러 주세요.";
+  });
+}
+document.getElementById("attach").onsubmit = function (e) {
+  e.preventDefault();
+  var p = parse(input.value);
+  if (!p) { msg.className = "msg bad"; msg.textContent = "회사 아이디나 붙이는 코드를 넣어 주세요."; input.focus(); return; }
+  attach(p);
+};
+document.getElementById("demo").onclick = function () { attach({ tid: "demo", server: SERVER }); };
+detachBtn.onclick = function () { delete saved[cur]; keep(); load(cur); paint(); input.focus(); };
+tabsEl.addEventListener("keydown", function (e) {
+  var i = TABS.map(function (t) { return t.id; }).indexOf(cur), n = TABS.length;
+  if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+    e.preventDefault(); var j = (i + (e.key === "ArrowRight" ? 1 : n - 1)) % n;
+    show(TABS[j].id); document.getElementById("tab-" + TABS[j].id).focus();
+  }
+});
+var start = location.hash.slice(1);
+show(TABS.some(function (t) { return t.id === start; }) ? start : TABS[0].id);
+</script>
+</body>
+</html>
