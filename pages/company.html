@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>우리 회사 홈페이지 (체험용)</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="page.css">
+<style>:root{--a:#1F4FD8;--bg:#FFFFFF;--ink:#16212B;--card:#F2F5F8;--r:8px;--pic:linear-gradient(135deg,var(--a),#C9D3E0)}</style>
+</head>
+<body>
+<!-- 회사 전용 체험 페이지에 들어가는 한 장짜리 홈페이지. 회사 이름·색은 서버의 공개 정보에서 가져온다. -->
+<header class="bar"><div class="wrap"><a class="logo" href="#"><b id="ini">우</b><span id="nm">우리 회사</span></a><nav><a href="#">회사 소개</a><a href="#">제품</a><a href="#">문의</a></nav></div></header>
+<div class="hero"><div class="wrap">
+  <div><small>체험용 홈페이지</small><h1 id="hd">우리 회사 홈페이지에 챗봇을 붙인 모습이에요</h1><p>오른쪽 아래 버튼을 눌러 손님처럼 물어보세요. 실제 홈페이지에도 이렇게 붙어요.</p><a class="btn" href="#">제품 보기</a><a class="btn ghost" href="#">문의하기</a></div>
+  <div class="pic" role="img" aria-label="회사 대표 사진 자리"><span>대표 사진 자리</span></div>
+</div></div>
+<section><div class="wrap"><h2>제품</h2><p class="lead">실제 홈페이지에서는 이 자리에 제품 소개가 들어가요.</p><div class="cards"><div class="card"><h3>제품 1</h3><p>제품 설명 자리</p></div><div class="card"><h3>제품 2</h3><p>제품 설명 자리</p></div><div class="card"><h3>제품 3</h3><p>제품 설명 자리</p></div></div></div></section>
+<footer><div class="wrap"><span id="ft">우리 회사</span><span>체험용 화면이라 손님에게는 보이지 않아요</span></div></footer>
+<script>
+(function () {
+  var q = new URLSearchParams(location.search), tid = q.get("t");
+  var server = q.get("s") || "https://inquiry-desk-production-aaa6e4ea.up.railway.app";
+  if (!tid) return;
+  fetch(server + "/api/t/" + encodeURIComponent(tid) + "/public").then(function (r) { return r.ok ? r.json() : null; }).then(function (c) {
+    if (!c) return;
+    var name = (c.name || tid).replace(/\s*\((예시|체험)\)\s*$/, "") || tid;
+    document.getElementById("nm").textContent = name;
+    document.getElementById("ft").textContent = name;
+    document.getElementById("ini").textContent = name.charAt(0);
+    document.title = name + " (체험용)";
+    var col = c.brand && c.brand.color;
+    if (/^#[0-9a-f]{6}$/i.test(col || "")) document.documentElement.style.setProperty("--a", col);
+  }, function () {});
+})();
+</script>
+<script src="attach.js"></script>
+</body>
+</html>
