@@ -36,7 +36,14 @@
   main{flex:1;position:relative;min-height:0}
   iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:#fff}
   iframe[hidden]{display:none}
-  @media (max-width:600px){header{padding:10px 16px 0}nav{margin:0 -16px;padding:0 16px}.top p{display:none}}
+  .attach[hidden],.mine[hidden]{display:none}
+  .mine{margin:10px 0 12px;display:grid;gap:8px}
+  .mine .lock{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:var(--ok)}
+  .mine .lock::before{content:"";width:9px;height:7px;border:2px solid currentColor;border-radius:2px;box-shadow:0 -4px 0 -2px currentColor}
+  .mine ol{margin:0;padding-left:20px;display:grid;gap:3px;font-size:14px;color:var(--sub);line-height:1.55}
+  .mine ol b{color:var(--ink);font-weight:700}
+  .mine .bad{color:var(--warn);font-size:14px;margin:0}
+  @media (max-width:600px){header{padding:10px 16px 0}nav{margin:0 -16px;padding:0 16px}.top p{display:none}.mine ol{font-size:13.5px}}
 </style>
 </head>
 <body>
@@ -53,6 +60,7 @@
     <button type="button" id="detach" hidden>떼기</button>
     <p class="msg" id="msg" role="status"></p>
   </form>
+  <div class="mine" id="mine" hidden></div>
   <nav role="tablist" aria-label="예시 홈페이지" id="tabs"></nav>
 </header>
 <main id="stage"></main>
@@ -60,7 +68,7 @@
 <script>
 /* 탭 하나 = 예시 홈페이지 하나(pages/*.html)를 담은 iframe 하나. 챗봇은 그 안에만 붙어서 탭끼리 섞이지 않는다.
    탭마다 붙인 챗봇은 이 브라우저에만 기억한다(서버에는 아무것도 저장하지 않음). */
-var SERVER = "https://inquiry-desk-production-aaa6e4ea.up.railway.app";
+var SERVER = "https://inquiry-desk-production-aaa6e4ea.up.railway.app", LIVE_SERVER = SERVER;
 var TABS = [
   { id: "maker", name: "부품 제조사" },
   { id: "shop", name: "온라인 쇼핑몰" },
@@ -87,7 +95,21 @@ TABS.forEach(function (t) {
   tabsEl.appendChild(b);
 });
 
+/* 회사 전용 페이지: 관리 화면 7단계가 주는 주소(?c=회사아이디#k=관리열쇠). 열쇠가 맞아야만 열리고,
+   열쇠는 주소에서 바로 지우고 이 브라우저에만 기억한다. 모든 탭에 그 회사 챗봇이 '써 보기' 모드로 붙는다. */
+var MINE = new URLSearchParams(location.search).get("c") || "", MYKEY = "";
+var LOCAL_S = new URLSearchParams(location.search).get("s") || "";   /* 내 컴퓨터 서버로 시험할 때만 */
+if (MINE && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(LOCAL_S)) SERVER = LOCAL_S;
+if (MINE) {
+  var hk = /(?:^|[#&])k=([^&]+)/.exec(location.hash);
+  if (hk) {
+    MYKEY = decodeURIComponent(hk[1]);
+    try { localStorage.setItem("pg:k:" + MINE, MYKEY); } catch (e) {}
+    history.replaceState(null, "", location.pathname + location.search);
+  } else { try { MYKEY = localStorage.getItem("pg:k:" + MINE) || ""; } catch (e) {} }
+}
 function src(id) {
+  if (MINE) return MYKEY && MINE_OK ? "pages/" + id + ".html?t=" + encodeURIComponent(MINE) + (SERVER !== LIVE_SERVER ? "&s=" + encodeURIComponent(SERVER) : "") + "#k=" + encodeURIComponent(MYKEY) : "pages/" + id + ".html";
   var s = saved[id], q = s ? "?t=" + encodeURIComponent(s.tid) + (s.server !== SERVER ? "&s=" + encodeURIComponent(s.server) : "") : "";
   return "pages/" + id + ".html" + q;
 }
@@ -96,7 +118,12 @@ function load(id) {
   if (!f) { f = frames[id] = document.createElement("iframe"); f.title = TABS.filter(function (t) { return t.id === id; })[0].name + " 예시 홈페이지"; stage.appendChild(f); }
   f.src = src(id);
 }
+var MINE_OK = false;
 function paint() {
+  if (MINE) {
+    TABS.forEach(function (t) { var b = document.getElementById("tab-" + t.id); b.setAttribute("aria-selected", t.id === cur); b.tabIndex = t.id === cur ? 0 : -1; b.classList.toggle("has", MINE_OK); });
+    return;
+  }
   TABS.forEach(function (t) {
     var b = document.getElementById("tab-" + t.id);
     b.setAttribute("aria-selected", t.id === cur); b.tabIndex = t.id === cur ? 0 : -1;
@@ -156,6 +183,31 @@ tabsEl.addEventListener("keydown", function (e) {
   }
 });
 var start = location.hash.slice(1);
+if (MINE) {
+  document.getElementById("attach").hidden = true;
+  var box = document.getElementById("mine"); box.hidden = false;
+  document.querySelector(".top p").textContent = "열쇠가 담긴 이 주소를 받은 분만 볼 수 있어요.";
+  box.innerHTML = '<p class="msg">확인하는 중이에요…</p>';
+  var fail = function (t) { box.innerHTML = '<p class="bad">' + t + '</p>'; show(TABS[0].id); };
+  if (!MYKEY) fail("이 주소로는 전용 페이지를 열 수 없어요. 관리 화면 7단계의 '체험장에서 써 보기'를 다시 눌러 주세요.");
+  else Promise.all([
+    fetch(SERVER + "/api/admin/" + encodeURIComponent(MINE) + "/plan", { headers: { "x-admin-key": MYKEY } }),
+    fetch(SERVER + "/api/t/" + encodeURIComponent(MINE) + "/public").then(function (r) { return r.ok ? r.json() : {}; }, function () { return {}; })
+  ]).then(function (r) {
+    if (!r[0].ok) { try { localStorage.removeItem("pg:k:" + MINE); } catch (e) {} fail(r[0].status === 401 || r[0].status === 404 ? "열쇠가 맞지 않거나 회사가 없어요. 관리 화면 7단계의 '체험장에서 써 보기'를 다시 눌러 주세요." : "지금은 챗봇 서버에 닿지 않아요. 잠시 뒤 새로 고쳐 주세요."); return; }
+    MINE_OK = true;
+    var name = (r[1] && r[1].name) || MINE;
+    document.querySelector(".top h1").textContent = name + " 전용 체험 페이지";
+    document.title = name + " 전용 체험 페이지";
+    box.innerHTML = '<span class="lock">이 주소를 받은 분만 볼 수 있어요. 다른 회사와 손님에게는 안 보여요.</span>'
+      + '<ol><li><b>아래 탭에서 우리 홈페이지와 비슷한 곳을 골라요.</b> 탭마다 다른 종류의 홈페이지에 우리 챗봇이 붙어 있어요.</li>'
+      + '<li><b>손님처럼 물어보고, 문의서도 열어 보세요.</b> 여기서 물어본 건 손님 질문 수에 들어가지 않고 아침 메일에도 안 가요.</li>'
+      + '<li><b>채팅창 크기도 바꿔 보세요.</b> 창 위쪽 \'크게 보기\'를 누르거나 왼쪽 위 모서리를 끌면 돼요.</li>'
+      + '<li><b>답이나 모양을 고치고 싶으면 관리 화면에서 고쳐요.</b> 고친 내용은 여기에 바로 반영돼요.</li></ol>';
+    Object.keys(frames).forEach(function (k) { load(k); });
+    paint();
+  }, function () { fail("지금은 챗봇 서버에 닿지 않아요. 잠시 뒤 새로 고쳐 주세요."); });
+}
 show(TABS.some(function (t) { return t.id === start; }) ? start : TABS[0].id);
 </script>
 </body>
