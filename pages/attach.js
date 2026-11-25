@@ -12,7 +12,7 @@
     return;
   }
   var s = document.createElement("script");
-  s.src = server + "/widget.js";
+  s.src = server + "/widget.js?v=" + Date.now();   /* 체험장은 늘 가장 새 위젯으로 */
   s.setAttribute("data-tenant", tid);
   var hk = /(?:^|[#&])k=([^&]+)/.exec(location.hash);   /* 회사 전용 페이지: 관리 열쇠로 써 보기 모드 */
   if (hk) {

@@ -52,7 +52,7 @@
   .fit .seg button.on{background:var(--act);color:#fff}
   .fit .num{min-width:5.2em;text-align:center;font-variant-numeric:tabular-nums;font-weight:600;color:var(--sub)}
   .fit button.sm{padding:6px 10px;min-width:34px}
-  .fit .done{margin-left:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .fit .done{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
   .fit .say{font-size:13.5px;color:var(--ok);font-weight:600}
   .fit .say.bad{color:var(--warn)}
   .fit[hidden]{display:none}
@@ -260,7 +260,15 @@ function setupFit(brand) {
     fit.querySelectorAll("[data-d]").forEach(function (b) { b.disabled = st.view !== "pc"; });
   }
   /* 위젯이 다 뜰 때까지 기다렸다가 맞춘다(새로 고칠 때마다) */
-  function whenReady() { var n = 0, t = setInterval(function () { if (apply() || ++n > 40) { clearInterval(t); draw(); } }, 250); }
+  function whenReady() {
+    var n = 0, t = setInterval(function () {
+      if (apply()) { clearInterval(t); draw(); return; }
+      if (++n > 40) {   /* 10초가 지나도 위젯 손잡이가 없으면 옛 위젯이다 */
+        clearInterval(t); draw();
+        say.className = "say bad"; say.textContent = "채팅창이 아직 옛 버전이에요. Ctrl+Shift+R로 새로 고쳐 주세요.";
+      }
+    }, 250);
+  }
   frames.company.addEventListener("load", whenReady);
   whenReady();
   /* 채팅창 모서리를 직접 끌어 바꾼 크기도 숫자에 반영한다 */
