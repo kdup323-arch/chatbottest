@@ -56,6 +56,16 @@
   .fit .say{font-size:13.5px;color:var(--ok);font-weight:600}
   .fit .say.bad{color:var(--warn)}
   .fit[hidden]{display:none}
+  .fit .sw{display:inline-flex;gap:5px}
+  .fit .sw button{width:24px;height:24px;padding:0;border-radius:50%;border:2px solid var(--card);box-shadow:0 0 0 1px var(--line);background:var(--sc)}
+  .fit .sw button.on{box-shadow:0 0 0 2px var(--act)}
+  .fit .pick{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--sub);cursor:pointer;border:1px solid var(--line);border-radius:9px;padding:3px 10px 3px 4px}
+  .fit .pick input{width:24px;height:24px;padding:0;border:0;background:none;cursor:pointer}
+  .fit .pick.on{border-color:var(--act);color:var(--ink)}
+  .fit .tips{flex-basis:100%;display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;margin:0}
+  .fit .tips p{margin:0;font-size:13px;line-height:1.55;color:var(--sub)}
+  .fit .tips b{color:var(--ink);margin-right:6px}
+  @media (max-width:760px){.fit .tips{grid-template-columns:1fr}}
   main.phone{display:grid;place-items:center;background:var(--bg);padding:20px 16px;overflow:auto}
   main.phone iframe{position:relative;inset:auto;width:390px;max-width:100%;height:min(780px,100%);border:10px solid #15202B;border-radius:34px;box-shadow:0 20px 50px -24px rgba(0,0,0,.5)}
   @media (max-width:600px){header{padding:10px 16px 0}nav{margin:0 -16px;padding:0 16px}.top p{display:none}.mine ol{font-size:13.5px}}
@@ -81,9 +91,12 @@
     <div class="grp">채팅창 자리 <span class="seg"><button type="button" data-pos="left">왼쪽 아래</button><button type="button" data-pos="right">오른쪽 아래</button></span></div>
     <div class="grp" id="sizeGrp">가로 <button type="button" class="sm" data-d="w:-40" aria-label="가로 줄이기">←</button><span class="num" id="wNum">-</span><button type="button" class="sm" data-d="w:40" aria-label="가로 늘리기">→</button>
       세로 <button type="button" class="sm" data-d="h:-40" aria-label="세로 줄이기">↓</button><span class="num" id="hNum">-</span><button type="button" class="sm" data-d="h:40" aria-label="세로 늘리기">↑</button></div>
+    <div class="grp" id="colGrp">색 <span class="sw" id="swatches"></span><label class="pick" title="다른 색 고르기"><input type="color" id="cPick" aria-label="다른 색 고르기"><span>다른 색</span></label></div>
     <div class="grp">디자인 <span class="seg"><button type="button" data-theme="">기본</button><button type="button" data-theme="light">밝게</button><button type="button" data-theme="ink">진하게</button><button type="button" data-theme="line">단정하게</button><button type="button" data-theme="soft">부드럽게</button></span></div>
     <div class="grp">문의서 크게 보기 <span class="seg"><button type="button" data-fbig="1">켜기</button><button type="button" data-fbig="0">끄기</button></span></div>
     <div class="grp">처음부터 열어 두기 <span class="seg"><button type="button" data-auto="1">켜기</button><button type="button" data-auto="0">끄기</button></span></div>
+    <div class="tips"><p><b>문의서 크게 보기</b> 문의서를 좁은 채팅창 안이 아니라 화면 가운데 큰 창으로 열어요. 항목이 많아도 한눈에 보여서 손님이 읽고 적기 편해요.</p>
+      <p><b>처음부터 열어 두기</b> 손님이 홈페이지에 들어오자마자 채팅창이 열려 있어요. 버튼을 찾지 않아도 바로 물어볼 수 있어서 문의로 이어지기 쉬워요. 휴대폰에서는 화면을 가리지 않게 버튼만 보여요.</p></div>
     <div class="done"><span class="say" id="say" role="status"></span><button type="button" class="go" id="confirm">이 모양으로 확정</button></div>
   </div>
   <nav role="tablist" aria-label="예시 홈페이지" id="tabs"></nav>
@@ -246,12 +259,24 @@ show(TABS.some(function (t) { return t.id === start; }) ? start : TABS[0].id);
 function setupFit(brand) {
   var fit = document.getElementById("fit"), say = document.getElementById("say"), stage = document.getElementById("stage");
   var st = { pos: brand.position === "left" ? "left" : "right", w: +brand.width || 400, h: +brand.height || 640, view: "pc", auto: !!brand.autoopen,
-            theme: ["light", "ink", "line", "soft"].indexOf(brand.theme) >= 0 ? brand.theme : "", fbig: !!brand.formbig };
+            theme: ["light", "ink", "line", "soft"].indexOf(brand.theme) >= 0 ? brand.theme : "", fbig: !!brand.formbig,
+            color: /^#[0-9a-f]{6}$/i.test(brand.color || "") ? brand.color.toUpperCase() : "#1D4ED8" };
+  /* 색: 자주 쓰는 색 몇 개 + 직접 고르기. 위젯은 바깥 상자의 --c(바탕)·--ct(글자)로 칠해서, 그 값만 바꾸면 바로 바뀐다 */
+  var COLORS = ["#1D4ED8", "#0B3D91", "#0F766E", "#1B8556", "#B45309", "#BE123C", "#7C3AED", "#17191C"];
+  if (COLORS.indexOf(st.color) < 0) COLORS.unshift(st.color);
+  document.getElementById("swatches").innerHTML = COLORS.map(function (c) { return '<button type="button" data-col="' + c + '" style="--sc:' + c + '" aria-label="색 ' + c + '"></button>'; }).join("");
+  function textOn(hex) { var m = /^#?(..)(..)(..)$/.exec(hex); var l = m ? 0.299 * parseInt(m[1], 16) + 0.587 * parseInt(m[2], 16) + 0.114 * parseInt(m[3], 16) : 0; return l > 165 ? "#15202b" : "#fff"; }
+  function paintColor() {
+    var f = frames.company, d; try { d = f && f.contentDocument; } catch (e) { d = null; }
+    if (!d || !d.body) return;
+    d.documentElement.style.setProperty("--a", st.color);   /* 체험용 홈페이지 강조색도 같이 */
+    Array.prototype.forEach.call(d.body.children, function (el) { if (el.shadowRoot) { el.style.setProperty("--c", st.color); el.style.setProperty("--ct", textOn(st.color)); } });
+  }
   fit.hidden = false;
   function widget() { var f = frames.company; try { return f && f.contentWindow && f.contentWindow.rfqWidget; } catch (e) { return null; } }
   function apply() {
     var w = widget(); if (!w) return false;
-    w.place(st.pos); w.resize(st.w, st.h); if (w.theme) { w.theme(st.theme); w.formbig(st.fbig); } w.open();   /* 휴대폰 폭에서는 위젯이 알아서 화면 가득으로 바꾼다 */
+    paintColor(); w.place(st.pos); w.resize(st.w, st.h); if (w.theme) { w.theme(st.theme); w.formbig(st.fbig); } w.open();   /* 휴대폰 폭에서는 위젯이 알아서 화면 가득으로 바꾼다 */
     if (st.view === "pc") { var s = w.size(); if (s[0] > 0 && s[1] > 0) { st.w = s[0]; st.h = s[1]; } }   /* 화면보다 크면 줄어든 값으로(창이 닫혀 0이면 그대로) */
     return true;
   }
@@ -261,6 +286,8 @@ function setupFit(brand) {
     fit.querySelectorAll("[data-theme]").forEach(function (b) { b.classList.toggle("on", b.dataset.theme === st.theme); });
     fit.querySelectorAll("[data-fbig]").forEach(function (b) { b.classList.toggle("on", (b.dataset.fbig === "1") === st.fbig); });
     fit.querySelectorAll("[data-auto]").forEach(function (b) { b.classList.toggle("on", (b.dataset.auto === "1") === st.auto); });
+    fit.querySelectorAll("[data-col]").forEach(function (b) { b.classList.toggle("on", b.dataset.col === st.color); });
+    var pk = document.getElementById("cPick"); pk.value = st.color.toLowerCase(); pk.parentNode.classList.toggle("on", COLORS.indexOf(st.color) < 0);
     document.getElementById("wNum").textContent = st.w + "px";
     document.getElementById("hNum").textContent = st.h + "px";
     document.getElementById("sizeGrp").style.opacity = st.view === "pc" ? "" : ".45";
@@ -280,10 +307,12 @@ function setupFit(brand) {
   whenReady();
   /* 채팅창 모서리를 직접 끌어 바꾼 크기도 숫자에 반영한다 */
   setInterval(function () { var w = widget(); if (w && st.view === "pc") { var s = w.size(); if (s[0] > 0 && s[1] > 0 && (s[0] !== st.w || s[1] !== st.h)) { st.w = s[0]; st.h = s[1]; draw(); } } }, 600);
+  document.getElementById("cPick").addEventListener("input", function (e) { st.color = e.target.value.toUpperCase(); paintColor(); say.className = "say"; say.textContent = ""; draw(); });
   fit.addEventListener("click", function (e) {
     var b = e.target.closest("button"); if (!b || b.disabled) return;
     if (b.dataset.view) { st.view = b.dataset.view; stage.classList.toggle("phone", st.view === "phone"); setTimeout(apply, 150); }
     else if (b.dataset.pos) { st.pos = b.dataset.pos; apply(); }
+    else if (b.dataset.col) { st.color = b.dataset.col; paintColor(); }
     else if (b.dataset.theme != null) { st.theme = b.dataset.theme; apply(); }
     else if (b.dataset.fbig) { st.fbig = b.dataset.fbig === "1"; apply(); }
     else if (b.dataset.auto) { st.auto = b.dataset.auto === "1"; }
@@ -297,7 +326,7 @@ function setupFit(brand) {
     var btn = document.getElementById("confirm"); btn.disabled = true;
     say.className = "say"; say.textContent = "저장하는 중이에요…";
     fetch(SERVER + "/api/t/" + encodeURIComponent(MINE) + "/public").then(function (r) { return r.ok ? r.json() : {}; }).then(function (c) {
-      var b = Object.assign({}, c.brand || {}, { position: st.pos, width: st.w, height: st.h, autoopen: st.auto, theme: st.theme, formbig: st.fbig });
+      var b = Object.assign({}, c.brand || {}, { position: st.pos, width: st.w, height: st.h, autoopen: st.auto, theme: st.theme, formbig: st.fbig, color: st.color });
       return fetch(SERVER + "/api/admin/" + encodeURIComponent(MINE) + "/config", { method: "PUT", headers: { "Content-Type": "application/json", "x-admin-key": MYKEY }, body: JSON.stringify({ brand: b }) });
     }).then(function (r) {
       if (!r.ok) throw r.status;
