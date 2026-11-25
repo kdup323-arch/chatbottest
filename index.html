@@ -81,6 +81,7 @@
     <div class="grp">채팅창 자리 <span class="seg"><button type="button" data-pos="left">왼쪽 아래</button><button type="button" data-pos="right">오른쪽 아래</button></span></div>
     <div class="grp" id="sizeGrp">가로 <button type="button" class="sm" data-d="w:-40" aria-label="가로 줄이기">←</button><span class="num" id="wNum">-</span><button type="button" class="sm" data-d="w:40" aria-label="가로 늘리기">→</button>
       세로 <button type="button" class="sm" data-d="h:-40" aria-label="세로 줄이기">↓</button><span class="num" id="hNum">-</span><button type="button" class="sm" data-d="h:40" aria-label="세로 늘리기">↑</button></div>
+    <div class="grp">처음부터 열어 두기 <span class="seg"><button type="button" data-auto="1">켜기</button><button type="button" data-auto="0">끄기</button></span></div>
     <div class="done"><span class="say" id="say" role="status"></span><button type="button" class="go" id="confirm">이 모양으로 확정</button></div>
   </div>
   <nav role="tablist" aria-label="예시 홈페이지" id="tabs"></nav>
@@ -242,18 +243,19 @@ show(TABS.some(function (t) { return t.id === start; }) ? start : TABS[0].id);
    크기는 PC 화면 기준이다. 휴대폰에서는 채팅창이 늘 화면 가득 열린다. */
 function setupFit(brand) {
   var fit = document.getElementById("fit"), say = document.getElementById("say"), stage = document.getElementById("stage");
-  var st = { pos: brand.position === "left" ? "left" : "right", w: +brand.width || 400, h: +brand.height || 640, view: "pc" };
+  var st = { pos: brand.position === "left" ? "left" : "right", w: +brand.width || 400, h: +brand.height || 640, view: "pc", auto: !!brand.autoopen };
   fit.hidden = false;
   function widget() { var f = frames.company; try { return f && f.contentWindow && f.contentWindow.rfqWidget; } catch (e) { return null; } }
   function apply() {
     var w = widget(); if (!w) return false;
     w.place(st.pos); w.resize(st.w, st.h); w.open();   /* 휴대폰 폭에서는 위젯이 알아서 화면 가득으로 바꾼다 */
-    if (st.view === "pc") { var s = w.size(); st.w = s[0]; st.h = s[1]; }   /* 화면보다 크면 줄어든 값으로 */
+    if (st.view === "pc") { var s = w.size(); if (s[0] > 0 && s[1] > 0) { st.w = s[0]; st.h = s[1]; } }   /* 화면보다 크면 줄어든 값으로(창이 닫혀 0이면 그대로) */
     return true;
   }
   function draw() {
     fit.querySelectorAll("[data-view]").forEach(function (b) { b.classList.toggle("on", b.dataset.view === st.view); });
     fit.querySelectorAll("[data-pos]").forEach(function (b) { b.classList.toggle("on", b.dataset.pos === st.pos); });
+    fit.querySelectorAll("[data-auto]").forEach(function (b) { b.classList.toggle("on", (b.dataset.auto === "1") === st.auto); });
     document.getElementById("wNum").textContent = st.w + "px";
     document.getElementById("hNum").textContent = st.h + "px";
     document.getElementById("sizeGrp").style.opacity = st.view === "pc" ? "" : ".45";
@@ -272,25 +274,28 @@ function setupFit(brand) {
   frames.company.addEventListener("load", whenReady);
   whenReady();
   /* 채팅창 모서리를 직접 끌어 바꾼 크기도 숫자에 반영한다 */
-  setInterval(function () { var w = widget(); if (w && st.view === "pc") { var s = w.size(); if (s[0] > 0 && (s[0] !== st.w || s[1] !== st.h)) { st.w = s[0]; st.h = s[1]; draw(); } } }, 600);
+  setInterval(function () { var w = widget(); if (w && st.view === "pc") { var s = w.size(); if (s[0] > 0 && s[1] > 0 && (s[0] !== st.w || s[1] !== st.h)) { st.w = s[0]; st.h = s[1]; draw(); } } }, 600);
   fit.addEventListener("click", function (e) {
     var b = e.target.closest("button"); if (!b || b.disabled) return;
     if (b.dataset.view) { st.view = b.dataset.view; stage.classList.toggle("phone", st.view === "phone"); setTimeout(apply, 150); }
     else if (b.dataset.pos) { st.pos = b.dataset.pos; apply(); }
+    else if (b.dataset.auto) { st.auto = b.dataset.auto === "1"; }
     else if (b.dataset.d) { var p = b.dataset.d.split(":"); st[p[0]] += +p[1]; apply(); }
     else if (b.id === "confirm") { confirm(); return; }
     say.className = "say"; say.textContent = "";
     draw();
   });
   function confirm() {
+    st.w = Math.max(340, st.w || 400); st.h = Math.max(420, st.h || 640); draw();   /* 위젯이 받는 가장 작은 크기 */
     var btn = document.getElementById("confirm"); btn.disabled = true;
     say.className = "say"; say.textContent = "저장하는 중이에요…";
     fetch(SERVER + "/api/t/" + encodeURIComponent(MINE) + "/public").then(function (r) { return r.ok ? r.json() : {}; }).then(function (c) {
-      var b = Object.assign({}, c.brand || {}, { position: st.pos, width: st.w, height: st.h });
+      var b = Object.assign({}, c.brand || {}, { position: st.pos, width: st.w, height: st.h, autoopen: st.auto });
       return fetch(SERVER + "/api/admin/" + encodeURIComponent(MINE) + "/config", { method: "PUT", headers: { "Content-Type": "application/json", "x-admin-key": MYKEY }, body: JSON.stringify({ brand: b }) });
     }).then(function (r) {
       if (!r.ok) throw r.status;
-      say.textContent = "손님 화면에도 이렇게 보이게 할게요. 채팅창은 " + (st.pos === "left" ? "왼쪽" : "오른쪽") + " 아래, 크기는 가로 " + st.w + " × 세로 " + st.h + "px이에요.";
+      say.textContent = "손님 화면에도 이렇게 보이게 할게요. 채팅창은 " + (st.pos === "left" ? "왼쪽" : "오른쪽") + " 아래, 크기는 가로 " + st.w + " × 세로 " + st.h + "px이에요."
+        + (st.auto ? " PC에서는 홈페이지를 열면 채팅창이 바로 열려요(휴대폰은 버튼만)." : "");
     }).catch(function () {
       say.className = "say bad"; say.textContent = "저장하지 못했어요. 잠시 뒤 다시 눌러 주세요.";
     }).then(function () { btn.disabled = false; });
